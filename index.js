@@ -208,7 +208,7 @@ app.get("/recipes_detail/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const response = await axios.get(
-      `https://api.spoonacular.com/recipes/${id}/information?apiKey=${API_KEY}&includeNutrition=true`
+      `https://api.spoonacular.com/recipes/${id}/information?apiKey=${API_KEY}`
     );
     res.json(response.data); // Send full recipe details
   } catch (error) {
