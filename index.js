@@ -6,7 +6,6 @@ const jwt = require("jsonwebtoken");
 const axios = require("axios");
 
 dotenv.config();
-
 const cors = require("cors");
 
 const app = express();
@@ -14,7 +13,8 @@ app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URL)
+mongoose
+  .connect(process.env.MONGODB_URL)
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("Error connecting to MongoDB:", err));
 
@@ -27,6 +27,7 @@ const userSchema = new mongoose.Schema({
 });
 
 const savedRecipeSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   recipeId: { type: String, required: true },
   title: { type: String, required: true },
   image: { type: String, required: true },
@@ -40,7 +41,6 @@ const SavedRecipe = mongoose.model("SavedRecipe", savedRecipeSchema);
 // Middleware for authentication
 const authMiddleware = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
-
   if (!token) {
     return res.status(401).json({ message: "Access denied. No token provided." });
   }
@@ -50,13 +50,12 @@ const authMiddleware = (req, res, next) => {
     req.userId = decoded.userId;
     next();
   } catch (err) {
-    res.status(400).json({ message: "Invalid token" });
+    res.status(401).json({ message: "Invalid or expired token" });
   }
 };
 
 // Routes
 
-// Default route
 app.get("/", (req, res) => {
   res.send("Recipe App Backend");
 });
@@ -69,10 +68,16 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
     const hashPass = await bcrypt.hash(password, 10);
     const newUser = new User({ username, email, password: hashPass });
-    const savedUser = await newUser.save();
-    res.status(201).json({ message: "Registration Successful", savedUser });
+    await newUser.save();
+    
+    res.status(201).json({ message: "Registration successful" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error registering user" });
@@ -97,10 +102,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid password" });
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ userId: foundUser._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign({ userId: foundUser._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
 
     res.json({ message: "Login successful", token, user: foundUser });
   } catch (err) {
@@ -112,23 +114,25 @@ app.post("/login", async (req, res) => {
 // Fetch recipes from Spoonacular API
 app.get("/recipes", async (req, res) => {
   try {
-    const { query, number, offset } = req.query;
+    const { query, number = 10, offset = 0 } = req.query;
 
-    // Validate query parameters
-    if (!query || !number || !offset) {
-      return res.status(400).json({ message: "Query, number, and offset are required" });
+    if (!query) {
+      return res.status(400).json({ message: "Query parameter is required" });
     }
 
-    // Construct the Spoonacular API URL with query parameters
-    const apiUrl = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.SPOONACULAR_API_KEY}&query=${encodeURIComponent(query)}&number=${number}&offset=${offset}`;
-
-    // Call Spoonacular API
-    const response = await axios.get(apiUrl);
+    const response = await axios.get("https://api.spoonacular.com/recipes/complexSearch", {
+      params: {
+        apiKey: process.env.SPOONACULAR_API_KEY,
+        query,
+        number,
+        offset,
+      },
+    });
 
     res.json(response.data.results);
   } catch (err) {
-    console.error("Error fetching recipes:", err);
-    res.status(500).json({ message: "Error fetching recipes" });
+    console.error("Error fetching recipes:", err.response?.data || err.message);
+    res.status(500).json({ message: "Failed to fetch recipes. Try again later." });
   }
 });
 
@@ -136,12 +140,11 @@ app.get("/recipes", async (req, res) => {
 app.post("/recipes/save", authMiddleware, async (req, res) => {
   try {
     const { recipeId, title, image, category } = req.body;
-    const userId = req.userId; // From authMiddleware
+    const userId = req.userId;
 
-    const savedRecipe = new SavedRecipe({ recipeId, title, image, category });
+    const savedRecipe = new SavedRecipe({ userId, recipeId, title, image, category });
     await savedRecipe.save();
 
-    // Add the saved recipe to the user's savedRecipes array
     await User.findByIdAndUpdate(userId, { $push: { savedRecipes: savedRecipe._id } });
 
     res.status(201).json({ message: "Recipe saved successfully", savedRecipe });
@@ -155,8 +158,8 @@ app.post("/recipes/save", authMiddleware, async (req, res) => {
 app.get("/recipes/saved", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
-    const user = await User.findById(userId).populate("savedRecipes");
-    res.json(user.savedRecipes);
+    const recipes = await SavedRecipe.find({ userId });
+    res.json(recipes);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error fetching saved recipes" });
@@ -166,15 +169,11 @@ app.get("/recipes/saved", authMiddleware, async (req, res) => {
 // Reorder saved recipes
 app.put("/recipes/reorder", authMiddleware, async (req, res) => {
   try {
-    const { recipes } = req.body; // Array of recipe IDs in new order
-    const userId = req.userId;
-
-    // Update the position of each recipe
+    const { recipes } = req.body;
     for (let i = 0; i < recipes.length; i++) {
       await SavedRecipe.findByIdAndUpdate(recipes[i], { position: i });
     }
-
-    res.status(200).json({ message: "Recipes reordered successfully" });
+    res.json({ message: "Recipes reordered successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error reordering recipes" });
@@ -187,7 +186,10 @@ app.delete("/recipes/:id", authMiddleware, async (req, res) => {
     const recipeId = req.params.id;
     const userId = req.userId;
 
-    await SavedRecipe.findByIdAndDelete(recipeId);
+    const recipe = await SavedRecipe.findOneAndDelete({ _id: recipeId, userId });
+    if (!recipe) {
+      return res.status(404).json({ message: "Recipe not found or already deleted" });
+    }
 
     await User.findByIdAndUpdate(userId, { $pull: { savedRecipes: recipeId } });
 
@@ -200,6 +202,4 @@ app.delete("/recipes/:id", authMiddleware, async (req, res) => {
 
 // Start the server
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
