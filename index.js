@@ -201,6 +201,23 @@ app.delete("/recipes/:id", authMiddleware, async (req, res) => {
   }
 });
 
+app.get("/recipes_detail/:id", async (req, res) => {
+  try {
+    const recipeId = req.params.id;
+
+    const response = await axios.get(
+      `https://api.spoonacular.com/recipes/${recipeId}/information`,
+      { params: { apiKey: process.env.SPOONACULAR_API_KEY } }
+    );
+
+    res.json(response.data);
+  } catch (err) {
+    console.error("Error fetching recipe details:", err.response?.data || err.message);
+    res.status(500).json({ message: "Failed to fetch recipe details. Try again later." });
+  }
+});
+
+
 // Start the server
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
