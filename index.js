@@ -116,18 +116,18 @@ app.get("/recipes", async (req, res) => {
   try {
     const { query, number = 10, offset = 0 } = req.query;
 
-    if (!query) {
-      return res.status(400).json({ message: "Query parameter is required" });
+    const params = {
+      apiKey: process.env.SPOONACULAR_API_KEY,
+      number,
+      offset,
+    };
+
+    // ✅ Only include `query` if it's provided (not required)
+    if (query && query.trim() !== "") {
+      params.query = query;
     }
 
-    const response = await axios.get("https://api.spoonacular.com/recipes/complexSearch", {
-      params: {
-        apiKey: process.env.SPOONACULAR_API_KEY,
-        query,
-        number,
-        offset,
-      },
-    });
+    const response = await axios.get("https://api.spoonacular.com/recipes/complexSearch", { params });
 
     res.json(response.data.results);
   } catch (err) {
@@ -135,6 +135,7 @@ app.get("/recipes", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch recipes. Try again later." });
   }
 });
+
 
 // Save a recipe
 app.post("/recipes/save", authMiddleware, async (req, res) => {
