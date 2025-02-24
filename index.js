@@ -1,19 +1,16 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
-const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 
-// Load environment variables
 dotenv.config();
 
-// Initialize Express app
-const app = express();
+const cors = require("cors");
 
-// Middleware
-app.use(cors()); // Allow requests from any origin
+const app = express();
+app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB
@@ -65,7 +62,7 @@ app.get("/", (req, res) => {
 });
 
 // User registration
-app.post("/api/auth/register", async (req, res) => {
+app.post("/register", async (req, res) => {
   try {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -83,7 +80,7 @@ app.post("/api/auth/register", async (req, res) => {
 });
 
 // User login
-app.post("/api/auth/login", async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -113,7 +110,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // Fetch recipes from Spoonacular API
-app.get("/api/recipes", async (req, res) => {
+app.get("/recipes", async (req, res) => {
   try {
     const { query, number, offset } = req.query;
 
@@ -129,13 +126,12 @@ app.get("/api/recipes", async (req, res) => {
         params: {
           apiKey: process.env.SPOONACULAR_API_KEY,
           query: query,
-          number: number, // Number of recipes to fetch
-          offset: offset, // Pagination offset
+          number: number,
+          offset: offset, 
         },
       }
     );
 
-    // Return the results to the frontend
     res.json(response.data.results);
   } catch (err) {
     console.error("Error fetching recipes:", err);
@@ -144,7 +140,7 @@ app.get("/api/recipes", async (req, res) => {
 });
 
 // Save a recipe
-app.post("/api/recipes/save", authMiddleware, async (req, res) => {
+app.post("/recipes/save", authMiddleware, async (req, res) => {
   try {
     const { recipeId, title, image, category } = req.body;
     const userId = req.userId; // From authMiddleware
@@ -163,7 +159,7 @@ app.post("/api/recipes/save", authMiddleware, async (req, res) => {
 });
 
 // Get saved recipes
-app.get("/api/recipes/saved", authMiddleware, async (req, res) => {
+app.get("/recipes/saved", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
     const user = await User.findById(userId).populate("savedRecipes");
@@ -175,7 +171,7 @@ app.get("/api/recipes/saved", authMiddleware, async (req, res) => {
 });
 
 // Reorder saved recipes
-app.put("/api/recipes/reorder", authMiddleware, async (req, res) => {
+app.put("/recipes/reorder", authMiddleware, async (req, res) => {
   try {
     const { recipes } = req.body; // Array of recipe IDs in new order
     const userId = req.userId;
@@ -193,15 +189,13 @@ app.put("/api/recipes/reorder", authMiddleware, async (req, res) => {
 });
 
 // Remove a saved recipe
-app.delete("/api/recipes/:id", authMiddleware, async (req, res) => {
+app.delete("/recipes/:id", authMiddleware, async (req, res) => {
   try {
     const recipeId = req.params.id;
     const userId = req.userId;
 
-    // Remove the recipe from the SavedRecipe collection
     await SavedRecipe.findByIdAndDelete(recipeId);
 
-    // Remove the recipe reference from the user's savedRecipes array
     await User.findByIdAndUpdate(userId, { $pull: { savedRecipes: recipeId } });
 
     res.json({ message: "Recipe removed successfully" });
