@@ -119,18 +119,11 @@ app.get("/recipes", async (req, res) => {
       return res.status(400).json({ message: "Query, number, and offset are required" });
     }
 
+    // Construct the Spoonacular API URL with query parameters
+    const apiUrl = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.SPOONACULAR_API_KEY}&query=${encodeURIComponent(query)}&number=${number}&offset=${offset}`;
+
     // Call Spoonacular API
-    const response = await axios.get(
-      `https://api.spoonacular.com/recipes/complexSearch`,
-      {
-        params: {
-          apiKey: process.env.SPOONACULAR_API_KEY,
-          query: query,
-          number: number,
-          offset: offset, 
-        },
-      }
-    );
+    const response = await axios.get(apiUrl);
 
     res.json(response.data.results);
   } catch (err) {
