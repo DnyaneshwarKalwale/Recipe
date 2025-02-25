@@ -216,6 +216,29 @@ app.get("/recipes_detail/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch recipe details" });
   }
 });
+
+// Search recipes
+app.get("/recipes/search", async (req, res) => {
+  try {
+    const { query } = req.query;
+    const response = await axios.get(
+      "https://api.spoonacular.com/recipes/complexSearch",
+      {
+        params: {
+          apiKey: process.env.SPOONACULAR_API_KEY,
+          query: query,
+          number: 10, // Number of results to return
+        },
+      }
+    );
+    res.json(response.data.results);
+  } catch (err) {
+    console.error("Error searching recipes:", err.response?.data || err.message);
+    res.status(500).json({ message: "Failed to search recipes. Try again later." });
+  }
+});
+
+
 // Start the server
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
