@@ -121,8 +121,6 @@ app.get("/recipes", async (req, res) => {
       number,
       offset,
     };
-
-    // ✅ Only include `query` if it's provided (not required)
     if (query && query.trim() !== "") {
       params.query = query;
     }
